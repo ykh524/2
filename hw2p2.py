@@ -1,25 +1,25 @@
 import math, statistics, numpy as np, pandas as pd
 
-# 为了可重复随机实验，设置随机种子
+# Set random seed for reproducibility
 np.random.seed(42)
 
-# 隐私参数
-EPS_TOTAL = 1.0          # 总隐私预算 ε
-DELTA     = 0.05         # 理论界限失败概率 δ
-R         = 1000         # Monte-Carlo 重复次数
-CSV_FILE  = "adult.csv"  # 数据文件路径
+#  Privacy parameters
+EPS_TOTAL = 1.0          # otal privacy budget ε
+DELTA     = 0.05         # Theoretical failure probability δ
+R         = 1000         # Monte-Carlo repetition count
+CSV_FILE  = "adult.csv"  # Data file path
 
-# 对数值属性发布差分隐私直方图
-# series: Pandas Series；bins: 区间边界；eps: 隐私预算 ε
-# global sensitivity = 1 (插入/删除邻居模型)
-# Laplace 噪声尺度 b = 1/ε
+# Differential privacy histogram for numerical attributes
+# series: Pandas Series; bins: bin edges; eps: privacy budget ε
+# global sensitivity = 1 (insert/delete neighboring model)
+# Laplace noise scale b = 1/ε
 def dp_histogram(series, bins, eps):
     counts, edges = np.histogram(series.to_numpy(), bins=bins)
     noisy = counts + np.random.laplace(scale=1/eps, size=len(counts))
     return noisy, edges
 
-# 对类别属性发布差分隐私计数
-# series: Pandas Series；eps: 隐私预算 ε
+# Differential privacy histogram for categorical attributes
+# series: Pandas Series; eps: privacy budget ε
 # global sensitivity = 1
 # Laplace b = 1/ε
 def categorical_dp_hist(series, eps):
@@ -28,18 +28,18 @@ def categorical_dp_hist(series, eps):
     noisy   = counts + np.random.laplace(scale=1/eps, size=len(counts))
     return noisy, labels
 
-# 读取数据
+# Read data
 df = pd.read_csv(CSV_FILE)
 
-# 准备真实直方图/计数
-bins_age    = np.linspace(17, 91, 11)  # 年龄 10 等宽区间
+# Prepare true histograms/counts
+bins_age    = np.linspace(17, 91, 11)  # Age: 10 equal-width intervals
 true_age, _ = np.histogram(df["age"], bins=bins_age)
 lab_wc      = df["workclass"].unique()
 true_wc     = df["workclass"].value_counts().reindex(lab_wc, fill_value=0).values
 lab_ed      = df["education"].unique()
 true_ed     = df["education"].value_counts().reindex(lab_ed, fill_value=0).values
 
-# Scenario (i): 每个属性 ε = 1
+# Scenario (i): Each attribute ε = 1
 eps_i = EPS_TOTAL
 age_noisy_i, _   = dp_histogram(df["age"], bins_age, eps_i)
 wc_noisy_i, lab_w = categorical_dp_hist(df["workclass"], eps_i)
@@ -51,8 +51,8 @@ print("Noisy workclass counts: ", dict(zip(lab_w, wc_noisy_i.astype(int))))
 print("Noisy education counts: ", dict(zip(lab_e, ed_noisy_i.astype(int))))
 print()
 
-# Scenario (ii): 属性不相关时仍可并行消耗 ε，无需拆分预算
-# 直接使用 ε = 1，与 Scenario (i) 保持一致
+# Scenario (ii): Attributes are uncorrelated and can share ε in parallel, no need to split the budget
+# Use ε = 1 directly, same as Scenario (i)
 eps_each = EPS_TOTAL
 age_noisy_ii, _ = dp_histogram(df["age"], bins_age, eps_each)
 wc_noisy_ii, _  = categorical_dp_hist(df["workclass"], eps_each)
@@ -64,14 +64,14 @@ print("Noisy workclass counts: ", dict(zip(lab_w, wc_noisy_ii.astype(int))))
 print("Noisy education counts: ", dict(zip(lab_e, ed_noisy_ii.astype(int))))
 print()
 
-# 验证理论上界 vs 经验统计
+# Compare theoretical bound vs empirical statistics
 try:
     from tqdm import trange
 except ImportError:
     trange = range
 
 k_age, k_wc, k_ed = len(bins_age)-1, len(lab_wc), len(lab_ed)
-# 理论 sup‐error 上界 (Laplace b=1): (1/ε)·ln(k/δ) = ln(k/δ)
+# Theoretical sup-error bound (Laplace b=1): (1/ε)·ln(k/δ) = ln(k/δ)
 bound_age = math.log(k_age/DELTA)
 bound_wc  = math.log(k_wc/DELTA)
 bound_ed  = math.log(k_ed/DELTA)
